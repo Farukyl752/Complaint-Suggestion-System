@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adana Şikayet Haritası</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- SOL: Adana Bölge Haritası -->
+    <div class="map-wrapper">
+      <div class="map-info">👆 Haritada şikayet bölgesine tıklayın</div>
+
+      <div id="mapContainer" class="map-box">
+        <svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">
+          <!-- Zemin -->
+          <rect width="600" height="400" fill="#eef2f6" />
+
+          <!-- Seyhan Baraj Gölü ve Seyhan Nehri -->
+          <path data-bolge="Çukurova / Seyhan Baraj Gölü" d="M 210 0 L 420 0 Q 395 55 345 65 Q 290 70 250 45 Z" fill="#9ecae1" />
+          <path data-bolge="Seyhan Nehri Hattı" d="M 330 55 Q 345 140 335 220 Q 325 310 305 400" fill="none" stroke="#9ecae1" stroke-width="28" />
+
+          <!-- Yeşil Alanlar -->
+          <rect data-bolge="Seyhan / Merkez Park" x="270" y="115" width="50" height="90" rx="6" fill="#ccebc5" />
+          <rect data-bolge="Sarıçam / Balcalı (Çukurova Üni.)" x="355" y="55" width="195" height="70" rx="6" fill="#ccebc5" />
+          <rect data-bolge="Seyhan / Atatürk Parkı" x="135" y="185" width="90" height="45" rx="6" fill="#ccebc5" />
+
+          <!-- İlçe ve Mahalle Bölgeleri -->
+          <g fill="#dde5ed" stroke="#cbd5e1">
+            <rect data-bolge="Çukurova / Güzelyalı Mah." x="25" y="25" width="175" height="90" rx="6" />
+            <rect data-bolge="Çukurova / Yurt Mah." x="25" y="130" width="95" height="95" rx="6" />
+            <rect data-bolge="Seyhan / Gazipaşa Mah." x="135" y="130" width="125" height="45" rx="6" />
+            <rect data-bolge="Seyhan / Ziyapaşa & Reşatbey" x="25" y="240" width="275" height="70" rx="6" />
+            <rect data-bolge="Seyhan / Küçüksaat & Kuruköprü" x="25" y="325" width="255" height="55" rx="6" />
+            <rect data-bolge="Sarıçam / Osmangazi Mah." x="365" y="140" width="205" height="80" rx="6" />
+            <rect data-bolge="Yüreğir / Yavuzlar & Köprülü" x="360" y="235" width="210" height="75" rx="6" />
+            <rect data-bolge="Yüreğir / Atakent Mah." x="340" y="325" width="230" height="55" rx="6" />
+          </g>
+
+          <!-- Ana Caddeler ve Bulvarlar -->
+          <g stroke="#ffffff" stroke-linecap="round">
+            <line x1="0" y1="122" x2="320" y2="122" stroke-width="10" />
+            <line x1="0" y1="230" x2="600" y2="230" stroke-width="12" />
+            <line x1="0" y1="318" x2="600" y2="318" stroke-width="9" />
+            <line x1="128" y1="0" x2="128" y2="400" stroke-width="9" />
+            <line x1="465" y1="125" x2="465" y2="400" stroke-width="9" />
+          </g>
+
+          <!-- Tarihi Taşköprü -->
+          <line data-bolge="Tarihi Taşköprü" x1="312" y1="275" x2="355" y2="275" stroke="#d97706" stroke-width="8" stroke-linecap="round" />
+
+          <!-- Harita Üzerindeki Yazılar -->
+          <g class="map-labels">
+            <text x="315" y="32" fill="#0369a1">🌊 Seyhan Baraj Gölü</text>
+            <text x="112" y="72">🏘️ Çukurova / Güzelyalı</text>
+            <text x="72" y="180">🏡 Yurt Mah.</text>
+            <text x="198" y="156">🏢 Seyhan / Gazipaşa</text>
+            <text x="180" y="212">🌳 Atatürk Parkı</text>
+            <text x="295" y="165" fill="#15803d">🌲 Merkez Park</text>
+            <text x="160" y="278">🛍️ Seyhan / Ziyapaşa &amp; Reşatbey</text>
+            <text x="150" y="356">🕰️ Seyhan / Küçüksaat</text>
+            <text x="455" y="95">🎓 Sarıçam / Balcalı (ÇÜ)</text>
+            <text x="468" y="182">🏗️ Sarıçam / Osmangazi</text>
+            <text x="465" y="275">🏛️ Yüreğir / Köprülü</text>
+            <text x="455" y="356">🏘️ Yüreğir / Atakent</text>
+            <text x="334" y="264" fill="#92400e">🌉 Taşköprü</text>
+          </g>
+        </svg>
+
+        <!-- Seçilen Nokta Pini -->
+        <div id="mapPin" class="map-pin hidden"></div>
+      </div>
+    </div>
+
+    <!-- SAĞ: Konum ve Şikayet Formu -->
+    <div class="form-wrapper">
+      <h2>Adana Şikayet İlet</h2>
+      <p class="subtitle">Haritadan bir bölge seçin ve şikayetinizi gönderin.</p>
+
+      <form id="complaintForm">
+        <div class="form-group">
+          <label for="regionInput">Seçilen Bölge</label>
+          <input type="text" id="regionInput" placeholder="Haritadan seçin..." readonly required />
+        </div>
+
+        <div class="coords">
+          <div class="form-group">
+            <label for="latInput">Enlem (Lat)</label>
+            <input type="text" id="latInput" placeholder="-" readonly required />
+          </div>
+          <div class="form-group">
+            <label for="lngInput">Boylam (Lng)</label>
+            <input type="text" id="lngInput" placeholder="-" readonly required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="complaintInput">Şikayetiniz</label>
+          <textarea id="complaintInput" rows="5" placeholder="Şikayetinizi yazın..." required></textarea>
+        </div>
+
+        <button type="submit">Şikayeti ve Konumu İlet</button>
+      </form>
+
+      <!-- Kayıt Sonucu -->
+      <div id="outputBox" class="output-box hidden">
+        <div class="success-title">✅ Dosyaya Kaydedildi (sikayetler.json)</div>
+        <pre id="outputJson"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
