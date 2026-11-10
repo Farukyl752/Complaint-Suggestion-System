@@ -15,7 +15,6 @@ Vatandaşların kurum veya belediyelere **şikâyet ve öneri** iletip, **takip 
 ├── server.py               # Ana HTTP sunucusu, SQLite (data/kent.db) + JSON (sikayetler.json) kayıt ve API uçları
 ├── basvuru-kurallari.js    # Departman yönlendirme kuralları, veri doğrulama ve önceliklendirme
 ├── complaint_ordering.js   # Google Gemini LLM öncelik analizi, toplu sıralama ve ortak yerel puanlama
-├── testler/                # Birim ve entegrasyon testleri
 ├── ornek-ayarlar.env       # Örnek ortam değişkenleri şablonu
 └── sikayetler.json         # Kaydedilen başvuruların otomatik senkronize edilen JSON çıktısı
 ```
