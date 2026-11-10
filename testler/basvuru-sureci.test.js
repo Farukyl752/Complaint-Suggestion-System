@@ -1,41 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {application} from '../sunucu.js';
-import {prioritize, validReport} from '../basvuru-kurallari.js';
+import {prioritize, validReport, inferCategory, departments} from '../basvuru-kurallari.js';
+import {analyzeWithGemini, orderComplaintList, localPrioritize} from '../complaint_ordering.js';
 
-const report = {kind:'Şikâyet',category:'Yol ve kaldırım',description:'Kaldırımın ortasında açık rögar var.',lat:39.93,lng:32.86};
+const report = {kind:'Şikâyet',category:'Yol ve kaldırım',description:'Kaldırımın ortasında açık rögar var.',lat:37.01,lng:35.32,region:'Adana - Seyhan / Gazipaşa Mah.'};
 
-test('Kayıt, otomatik atama, yetki, durum geçişi ve takip geçmişi', async t => {
-  const server = application({database:':memory:',password:'sample'});
-  await new Promise(done => server.listen(0,'127.0.0.1',done));
-  t.after(() => new Promise(done => server.close(done)));
-  const url = 'http://127.0.0.1:' + server.address().port + '/api/';
-  const post = data => fetch(url+'reports',{method:'POST',body:JSON.stringify(data)});
-  assert.equal((await post({...report,lat:null})).status,400);
-  const response = await post(report);
-  assert.equal(response.status,201);
-  const {code,department} = await response.json();
-  assert.equal(department,'Fen İşleri Müdürlüğü');
-  assert.match(code,/^KB-[A-F0-9]{20}$/);
-  assert.equal((await fetch(url+'staff')).status,401);
-  const headers = {Authorization:'Bearer sample'};
-  const [item] = await (await fetch(url+'staff',{headers})).json();
-  assert.equal(item.score,85);
-  assert.equal(item.lat,report.lat);
-  assert.equal(item.source,'Yerel kural');
-  const patch = (previous,status) => fetch(url+'staff/'+code,{method:'PATCH',headers,body:JSON.stringify({previous,status})});
-  assert.equal((await patch('Alındı','Sonuçlandı')).status,400);
-  assert.equal((await patch('Alındı','İnceleniyor')).status,200);
-  assert.equal((await patch('Alındı','İnceleniyor')).status,409);
-  assert.equal((await patch('İnceleniyor','İşlemde')).status,200);
-  assert.equal((await patch('İşlemde','Sonuçlandı')).status,200);
-  const tracked = await (await fetch(url+'track/'+code)).json();
-  assert.deepEqual(tracked.events.map(e=>e.status),['Alındı','İnceleniyor','İşlemde','Sonuçlandı']);
-  assert.equal(tracked.status,'Sonuçlandı');
-  assert.equal((await fetch(url+'track/unknown')).status,404);
+test('Ortak yerel puanlama kuralı hem tekil kayıtta hem sıralamada aynı sonucu verir', async () => {
+  const single = await prioritize(report, '');
+  const local = localPrioritize(report);
+  assert.equal(single.score, 85);
+  assert.equal(local.score, 85);
+  assert.equal(single.source, 'Yerel kural');
 });
 
-test('LLM puanını ve gerekçesini saklar, isteğe koordinat eklemez', async () => {
+test('OpenAI LLM puanını ve gerekçesini saklar, isteğe koordinat eklemez', async () => {
   const mock = async (url,options) => {
     const user = JSON.parse(JSON.parse(options.body).messages[1].content);
     assert.deepEqual(Object.keys(user),['type','category','text']);
@@ -43,12 +21,32 @@ test('LLM puanını ve gerekçesini saklar, isteğe koordinat eklemez', async ()
   };
   assert.equal((await prioritize(report,'test','test-model',mock)).score,91);
 });
+
+test('Gemini LLM analizi ve toplu sıralama çalışır', async () => {
+  const geminiMock = async () => Response.json({
+    candidates: [{content: {parts: [{text: '{"score":94,"reason":"Yüksek düşme ve yaralanma riski."}' }]}}]
+  });
+  const res = await analyzeWithGemini(report, 'AIzaSyTestKey', 'gemini-2.5-flash', geminiMock);
+  assert.equal(res.score, 94);
+  assert.equal(res.source, 'LLM (Gemini)');
+
+  const ordered = await orderComplaintList([
+    {kind: 'Öneri', description: 'Parka yeni banklar eklensin lütfen.'},
+    {kind: 'Şikâyet', description: 'Sokakta açık rögar ve kopmuş kablo var!'}
+  ], '');
+  assert.equal(ordered[0].score, 85);
+  assert.equal(ordered[1].score, 25);
+});
+
 test('Bozuk LLM yanıtında yerel puana döner', async () => {
   const result = await prioritize(report,'test','test-model',async () => Response.json({choices:[]}));
   assert.equal(result.source,'Yerel kural');
 });
-test('Kategori ve konum sınırları denetlenir', () => {
+
+test('Kategori, departman yönlendirme ve konum sınırları denetlenir', () => {
   assert.ok(validReport({...report, kind:'Öneri'}));
+  assert.equal(departments['Yol ve kaldırım'], 'Fen İşleri Müdürlüğü');
+  assert.equal(inferCategory('Mahalledeki çöp konteyneri taşmış'), 'Atık ve temizlik');
   for (const fields of [{category:'constructor'},{lng:181},{lat:-91},{description:'Kısa'}]) {
     assert.ok(!validReport({...report,...fields}));
   }

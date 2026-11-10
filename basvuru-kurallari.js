@@ -1,3 +1,5 @@
+import {analyzeWithGemini, localPrioritize} from './complaint_ordering.js';
+
 export const departments = Object.freeze({
   'Yol ve kaldırım': 'Fen İşleri Müdürlüğü',
   'Atık ve temizlik': 'Temizlik İşleri Müdürlüğü',
@@ -8,16 +10,37 @@ export const departments = Object.freeze({
 });
 export const statuses = ['Alındı', 'İnceleniyor', 'İşlemde', 'Sonuçlandı'];
 
+/**
+ * Metin içeriğinden otomatik kategori tahmini
+ */
+export function inferCategory(text = '') {
+  const lower = String(text).toLocaleLowerCase('tr');
+  if (/yol|kaldırım|asfalt|çukur|rögar|köprü|taşköprü|sokak|cadde/u.test(lower)) return 'Yol ve kaldırım';
+  if (/çöp|atık|temizlik|konteyner|kok|moloz|süpür/u.test(lower)) return 'Atık ve temizlik';
+  if (/park|yeşil|ağaç|çim|bahçe|bank|oyun alanı/u.test(lower)) return 'Park ve yeşil alan';
+  if (/su|kanalizasyon|boru|patlak|gider|taşkın|baraj|nehir/u.test(lower)) return 'Su ve kanalizasyon';
+  if (/otobüs|durak|ulaşım|metro|dolmuş|hat|sefer|trafik/u.test(lower)) return 'Toplu ulaşım';
+  return 'Diğer';
+}
+
 export function validReport(r) {
   return r && ['Şikâyet', 'Öneri'].includes(r.kind) && Object.hasOwn(departments, r.category)
     && typeof r.description === 'string' && r.description.trim().length >= 15 && r.description.length <= 3000
     && Number.isFinite(r.lat) && Math.abs(r.lat) <= 90
-    && Number.isFinite(r.lng) && Math.abs(r.lng) <= 180;
+    && Number.isFinite(r.lng) && Math.abs(r.lng) <= 180
+    && (r.region === undefined || (typeof r.region === 'string' && r.region.length <= 200));
 }
 
-export async function prioritize(report, key, model, request = fetch) {
+export async function prioritize(report, key, model = 'gpt-4o-mini', request = fetch) {
   if (key) {
     try {
+      // Gemini API anahtarı (AIza...) veya gemini modeli seçilmişse Modül 2 (complaint_ordering.js) üzerinden analiz et
+      if (String(model).startsWith('gemini') || String(key).startsWith('AIza')) {
+        const geminiResult = await analyzeWithGemini(report, key, model, request);
+        if (geminiResult) return geminiResult;
+      }
+
+      // OpenAI uyumlu Chat Completions API analizi
       const response = await request('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {Authorization: 'Bearer ' + key, 'Content-Type': 'application/json'},
@@ -39,8 +62,5 @@ export async function prioritize(report, key, model, request = fetch) {
       console.warn('LLM yanıtı kullanılamadı. Yerel değerlendirme uygulanıyor.');
     }
   }
-  const urgent = /çökme|yangın|açık rögar|su baskını|kopmuş kablo/u.test(report.description.toLocaleLowerCase('tr'));
-  return {score: urgent ? 85 : report.kind === 'Öneri' ? 25 : 50,
-    reason: urgent ? 'Metinde risk bildiren bir ifade bulundu.' : 'Başvuru türünün varsayılan puanı uygulandı.',
-    source: 'Yerel kural'};
+  return localPrioritize(report);
 }
